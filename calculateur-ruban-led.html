@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calculateur — Longueur max de fil pour ruban LED</title>
+<style>
+  :root {
+    --bg: #0f1420;
+    --card: #1a2130;
+    --card2: #212a3d;
+    --border: #2e3950;
+    --text: #e8edf6;
+    --muted: #8b97ad;
+    --accent: #ffb340;
+    --ok: #3ddc84;
+    --ko: #ff5c6c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 24px 16px 48px;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin-bottom: 4px; }
+  h1 span { color: var(--accent); }
+  .subtitle { color: var(--muted); font-size: .92rem; margin-bottom: 24px; }
+
+  .tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+  .tab {
+    padding: 10px 16px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--card); color: var(--muted); cursor: pointer;
+    font-size: .9rem; font-weight: 600; transition: all .15s;
+  }
+  .tab.active { background: var(--accent); color: #1a1200; border-color: var(--accent); }
+
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 22px; margin-bottom: 18px;
+  }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field.full { grid-column: 1 / -1; }
+  label { font-size: .82rem; color: var(--muted); font-weight: 600; }
+  select, input {
+    background: var(--card2); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); padding: 10px 12px;
+    font-size: 1rem; width: 100%;
+  }
+  select:focus, input:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+  .unit { font-size: .78rem; color: var(--muted); }
+
+  .result {
+    background: var(--card2); border-radius: 12px; padding: 18px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .big {
+    font-size: 2rem; font-weight: 800; color: var(--accent);
+    display: flex; align-items: baseline; gap: 8px;
+  }
+  .big small { font-size: 1rem; color: var(--muted); font-weight: 600; }
+  .row { display: flex; justify-content: space-between; font-size: .92rem; padding: 4px 0; border-bottom: 1px dashed var(--border); }
+  .row:last-child { border-bottom: none; }
+  .row .k { color: var(--muted); }
+  .row .v { font-weight: 700; }
+
+  .verdict { border-radius: 10px; padding: 14px 16px; font-weight: 700; font-size: .95rem; display: none; }
+  .verdict.ok { display: block; background: rgba(61,220,132,.12); border: 1px solid var(--ok); color: var(--ok); }
+  .verdict.ko { display: block; background: rgba(255,92,108,.12); border: 1px solid var(--ko); color: var(--ko); }
+
+  .bar-wrap { height: 14px; background: var(--border); border-radius: 7px; overflow: hidden; }
+  .bar { height: 100%; background: var(--ok); border-radius: 7px; transition: width .3s, background .3s; }
+
+  .note { color: var(--muted); font-size: .8rem; line-height: 1.5; margin-top: 14px; }
+  .formula { font-family: ui-monospace, Consolas, monospace; background: var(--card2); padding: 10px 12px; border-radius: 8px; font-size: .8rem; color: var(--accent); margin-top: 10px; overflow-x: auto; white-space: nowrap; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🔌 Calculateur de fil pour <span>ruban LED</span></h1>
+  <p class="subtitle">Longueur maximale de câble entre le driver (alimentation) et le ruban LED, en fonction de la chute de tension tolérée.</p>
+
+  <div class="tabs">
+    <button class="tab active" data-mode="maxlen">📏 Longueur max</button>
+    <button class="tab" data-mode="section">🧵 Section mini</button>
+    <button class="tab" data-mode="check">✅ Vérifier une installation</button>
+  </div>
+
+  <div class="card">
+    <div class="grid">
+      <div class="field">
+        <label>Tension du ruban</label>
+        <select id="u">
+          <option value="5">5 V</option>
+          <option value="12" selected>12 V</option>
+          <option value="24">24 V</option>
+          <option value="48">48 V</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Matériau du conducteur</label>
+        <select id="mat">
+          <option value="0.0175" selected>Cuivre</option>
+          <option value="0.028">Aluminium</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Puissance du ruban</label>
+        <div style="display:flex; gap:8px;">
+          <input type="number" id="wpm" value="14.4" min="0" step="0.1" style="flex:1">
+          <select id="pmode" style="flex:1">
+            <option value="wpm" selected>W/m</option>
+            <option value="wtot">W total</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Déperdition tolérée dans le câble</label>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input type="number" id="tol" value="3" min="0.1" max="20" step="0.5" style="flex:1">
+          <span class="unit">% de la tension</span>
+        </div>
+      </div>
+      <div class="field" id="f-len">
+        <label>Longueur de câble driver → ruban</label>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input type="number" id="len" value="5" min="0" step="0.1" style="flex:1">
+          <span class="unit">m</span>
+        </div>
+      </div>
+      <div class="field" id="f-sec">
+        <label>Section du câble</label>
+        <select id="sec">
+          <option value="0.5">0,5 mm²</option>
+          <option value="0.75">0,75 mm²</option>
+          <option value="1">1 mm²</option>
+          <option value="1.5" selected>1,5 mm²</option>
+          <option value="2.5">2,5 mm²</option>
+          <option value="4">4 mm²</option>
+          <option value="6">6 mm²</option>
+          <option value="10">10 mm²</option>
+        </select>
+      </div>
+      <div class="field" id="f-strip-len">
+        <label>Longueur totale de ruban LED</label>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input type="number" id="striplen" value="5" min="0" step="0.1" style="flex:1">
+          <span class="unit">m</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="result">
+      <div class="big" id="main-out">— <small></small></div>
+      <div class="bar-wrap"><div class="bar" id="bar" style="width:0%"></div></div>
+      <div class="row"><span class="k">Courant consommé par le ruban</span><span class="v" id="r-i">—</span></div>
+      <div class="row"><span class="k">Puissance totale du ruban</span><span class="v" id="r-p">—</span></div>
+      <div class="row"><span class="k">Chute de tension dans le câble</span><span class="v" id="r-du">—</span></div>
+      <div class="row"><span class="k">Déperdition</span><span class="v" id="r-pic">—</span></div>
+      <div class="row"><span class="k">Puissance perdue en chaleur dans le fil</span><span class="v" id="r-loss">—</span></div>
+      <div class="row"><span class="k">Tension réelle aux bornes du ruban</span><span class="v" id="r-uend">—</span></div>
+    </div>
+    <div class="verdict" id="verdict"></div>
+    <p class="note" id="advice"></p>
+    <div class="formula" id="formula"></div>
+  </div>
+
+  <p class="note">
+    📐 <b>Formule :</b> chute de tension aller-retour ΔU = 2 × L × ρ × I / S, avec I = P / U et ΔU<sub>max</sub> = U × tolérance %.
+    D'où la longueur maximale : L<sub>max</sub> = ΔU<sub>max</sub> × S / (2 × ρ × I).<br>
+    ⚠️ Le calcul ne prend en compte que la chute dans le câble d'alimentation. Un ruban LED long perd aussi de la tension le long de sa propre piste cuivrée : au-delà de 5 m en 12 V (10 m en 24 V), alimentez le ruban aux deux extrémités ou par tranches.
+  </p>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var $ = function (id) { return document.getElementById(id); };
+  var fmt = function (n, d) {
+    if (!isFinite(n)) return "—";
+    return n.toLocaleString("fr-FR", { minimumFractionDigits: d || 0, maximumFractionDigits: d === undefined ? 2 : d });
+  };
+
+  var modes = { maxlen: 1, section: 2, check: 3 };
+  var mode = modes.maxlen;
+
+  function inputs() {
+    var u = parseFloat($("u").value);
+    var rho = parseFloat($("mat").value);
+    var matName = $("mat").options[$("mat").selectedIndex].text;
+    var tol = parseFloat($("tol").value) / 100;
+    var pmode = $("pmode").value;
+    var wpm = parseFloat($("wpm").value) || 0;
+    var striplen = parseFloat($("striplen").value) || 0;
+    var pTot = pmode === "wpm" ? wpm * striplen : wpm;
+    var sec = parseFloat($("sec").value);
+    var len = parseFloat($("len").value) || 0;
+    return { u: u, rho: rho, matName: matName, tol: tol, pTot: pTot, sec: sec, len: len, i: u > 0 ? pTot / u : 0 };
+  }
+
+  function setFieldsVisibility() {
+    $("f-len").classList.toggle("hidden", mode === modes.maxlen);
+    $("f-sec").classList.toggle("hidden", mode === modes.section);
+  }
+
+  function render() {
+    var d = inputs();
+    var duMax = d.u * d.tol;
+    var main, unit, barPct, verdict, advice, formula;
+
+    if (d.pTot <= 0 || d.u <= 0 || d.tol <= 0) {
+      $("main-out").innerHTML = "— <small></small>";
+      $("bar").style.width = "0%";
+      ["r-i", "r-p", "r-du", "r-pic", "r-loss", "r-uend"].forEach(function (id) { $(id).textContent = "—"; });
+      verdict = null; advice = ""; formula = "";
+      setVerdict(null); $("advice").textContent = ""; $("formula").textContent = "";
+      return;
+    }
+
+    if (mode === modes.maxlen) {
+      var lmax = d.i > 0 ? (duMax * d.sec) / (2 * d.rho * d.i) : Infinity;
+      main = lmax; unit = "mètres de câble max";
+      var du = 2 * lmax * d.rho * d.i / d.sec;
+      barPct = 100;
+      verdict = null;
+      advice = "Au-delà de " + fmt(lmax, 2) + " m de câble en " + fmt(d.sec, 2).replace(",00", "") + " mm² (" + d.matName.toLowerCase() + "), la perte dépasserait " + fmt(d.tol * 100, 1) + " %. Les lignes de détail ci-dessus montrent la situation exactement à la limite. Consultez l'onglet « Vérifier une installation » pour tester une longueur précise.";
+      formula = "L_max = ΔU_max × S / (2 × ρ × I) = " + fmt(duMax, 2) + " V × " + d.sec + " mm² / (2 × " + d.rho + " × " + fmt(d.i, 2) + " A) = " + fmt(lmax, 2) + " m";
+      fillRows(d, du, duMax);
+    } else if (mode === modes.section) {
+      var sMin = d.i > 0 ? (2 * d.len * d.rho * d.i) / duMax : Infinity;
+      main = sMin; unit = "mm² minimum";
+      var standard = [0.5, 0.75, 1, 1.5, 2.5, 4, 6, 10];
+      var chosen = null;
+      for (var k = 0; k < standard.length; k++) { if (standard[k] >= sMin) { chosen = standard[k]; break; } }
+      var du2 = 2 * d.len * d.rho * d.i / d.sec;
+      barPct = Math.min(100, (sMin / d.sec) * 100);
+      verdict = d.sec >= sMin;
+      advice = chosen
+        ? "Section normalisée à utiliser : " + fmt(chosen, 2).replace(",00", "") + " mm² (ou plus)." + (d.sec >= sMin ? " Votre choix de " + fmt(d.sec, 2).replace(",00", "") + " mm² convient." : " Votre choix actuel de " + fmt(d.sec, 2).replace(",00", "") + " mm² est insuffisant.")
+        : "Aucune section standard ne suffit : réduisez la longueur du câble, augmentez la tension, ou alimentez le ruban en plusieurs points.";
+      formula = "S_min = 2 × L × ρ × I / ΔU_max = 2 × " + fmt(d.len, 1) + " × " + d.rho + " × " + fmt(d.i, 2) + " / " + fmt(duMax, 2) + " = " + fmt(sMin, 2) + " mm²";
+      fillRows(d, du2, duMax);
+    } else {
+      var du3 = 2 * d.len * d.rho * d.i / d.sec;
+      var pct = d.u > 0 ? (du3 / d.u) * 100 : 0;
+      main = du3; unit = "V de chute (aller-retour)";
+      barPct = Math.min(100, pct * 100 / (d.tol * 100));
+      verdict = du3 <= duMax;
+      advice = verdict
+        ? "✔ Installation correcte : " + fmt(pct, 2) + " % de perte (tolérance " + fmt(d.tol * 100, 1) + " %). Le ruban reçoit " + fmt(d.u - du3, 2) + " V."
+        : "✘ Trop de perte (" + fmt(pct, 2) + " % > " + fmt(d.tol * 100, 1) + " %) : câble plus gros, driver plus proche, ou passage en 24 V.";
+      formula = "ΔU = 2 × L × ρ × I / S = 2 × " + fmt(d.len, 1) + " × " + d.rho + " × " + fmt(d.i, 2) + " / " + d.sec + " = " + fmt(du3, 3) + " V";
+      fillRows(d, du3, duMax);
+    }
+
+    $("main-out").innerHTML = fmt(main, 2) + " <small>" + unit + "</small>";
+    var bar = $("bar");
+    bar.style.width = Math.max(2, barPct) + "%";
+    bar.style.background = verdict ? "var(--ok)" : "var(--ko)";
+    setVerdict(verdict);
+    $("advice").textContent = advice;
+    $("formula").textContent = formula;
+  }
+
+  function fillRows(d, du, duMax) {
+    var loss = du * d.i;
+    $("r-i").textContent = fmt(d.i, 2) + " A";
+    $("r-p").textContent = fmt(d.pTot, 1) + " W";
+    $("r-du").textContent = fmt(du, 3) + " V (max " + fmt(duMax, 2) + " V)";
+    $("r-pic").textContent = d.u > 0 ? fmt((du / d.u) * 100, 2) + " % (max " + fmt(d.tol * 100, 1) + " %)" : "—";
+    $("r-loss").textContent = fmt(loss, 2) + " W";
+    $("r-uend").textContent = fmt(d.u - du, 2) + " V";
+  }
+
+  function setVerdict(v) {
+    var el = $("verdict");
+    if (v === null) { el.className = "verdict"; el.textContent = ""; return; }
+    el.className = "verdict " + (v ? "ok" : "ko");
+    el.textContent = v ? "✔ Installation valide" : "✘ Installation non conforme";
+  }
+
+  var tabs = document.querySelectorAll(".tab");
+  tabs.forEach(function (t) {
+    t.addEventListener("click", function () {
+      tabs.forEach(function (x) { x.classList.remove("active"); });
+      t.classList.add("active");
+      mode = modes[t.getAttribute("data-mode")];
+      setFieldsVisibility();
+      render();
+    });
+  });
+
+  ["u", "mat", "tol", "wpm", "pmode", "len", "sec", "striplen"].forEach(function (id) {
+    $(id).addEventListener("input", render);
+    $(id).addEventListener("change", render);
+  });
+
+  setFieldsVisibility();
+  render();
+})();
+</script>
+</body>
+</html>
